@@ -8,6 +8,6 @@ mn -c
 killall -9 iperf
 killall -9 ping
 
-for cwnd in 4 10 20; do
+for cwnd in 4 6 10 26 42; do
   python cwnd_test.py --cwnd $cwnd
 done

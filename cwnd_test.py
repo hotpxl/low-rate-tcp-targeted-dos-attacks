@@ -31,13 +31,13 @@ parser.add_argument('--cwnd',
                     help="Initial cwnd size in packets.",
                     default=4)
 
-# Linux uses CUBIC-TCP by default that doesn't have the usual sawtooth
-# behaviour.  For those who are curious, invoke this script with
-# --cong cubic and see what happens...
-# sysctl -a | grep cong should list some interesting parameters.
+# From the paper: " The front-end servers run Linux with a reasonably
+# standards compliant TCP implementation [6] (the congestion control algorithm
+# used is TCP CUBIC), and the initial congestion window is
+# configured using the initcwnd option in the ip route command."
 parser.add_argument('--cong',
                     help="Congestion control algorithm to use",
-                    default="reno")
+                    default="cubic")
 
 # Expt parameters
 args = parser.parse_args()
@@ -45,8 +45,8 @@ args = parser.parse_args()
 HOST_SPEEDS = [56, 256, 512, 1000]  # Kbps
 
 
-class BBTopo(Topo):
-    "Simple topology for bufferbloat experiment."
+class InitCwndTopo(Topo):
+    "Simple topology for initcwnd experiment."
 
     def build(self):
         # Here I have created a switch.  If you change its name, its
@@ -64,7 +64,7 @@ class BBTopo(Topo):
 
         # Add links with appropriate characteristics.
         print 'adding links, delay=%s' % delay_str
-        for speed in HOST_SPEEDS: 
+        for speed in HOST_SPEEDS:
             host_id = 'h%s' % speed
             bw = speed / 1000.
             self.addLink(host_id, switch, bw=bw, delay=delay_str)
@@ -84,7 +84,7 @@ def start_webserver(net):
 
 def main():
     os.system("sysctl -w net.ipv4.tcp_congestion_control=%s" % args.cong)
-    topo = BBTopo()
+    topo = InitCwndTopo()
     net = Mininet(topo=topo, host=CPULimitedHost, link=TCLink)
     net.start()
     # This dumps the topology and how nodes are interconnected through
@@ -99,8 +99,12 @@ def main():
     for fn in (start_webserver,):
       procs[fn.__name__] = fn(net)
 
+    # Adjust cwnd on the server: "Our experiments consist of enabling a
+    # larger initial congestion window on front-end servers in several
+    # data centers at geographically diverse locations. We compare the
+    # results using the larger window against data from the same data centers
+    # using the standard initial congestion window as a baseline."
     server = net.get('server')
-    # adjust initcwnd
     current_config = server.cmd('ip route show').strip()
     print 'Initial ip route config: %s' % current_config
 
@@ -110,15 +114,16 @@ def main():
 
     for speed in HOST_SPEEDS:
       host = net.get('h%s' % speed)
+      print 'Testing %d Kbps download times with initcwnd=%d' % (
+          speed, args.cwnd)
 
-      print 'Testing %d Kbps download times...' % speed
-
+      # Test each host 5 times.
       fetch_times = []
       for _ in xrange(5):
         measured_time = float(host.cmd(
             'curl -o /dev/null -s -w %%{time_total} '
             '%s/http/index.html' % server.IP()))
-        print '* Fetch time: %.2f sec' % measured_time
+        print '   fetch time: %.2f sec' % measured_time
         fetch_times.append(measured_time)
         sleep(1)
 
