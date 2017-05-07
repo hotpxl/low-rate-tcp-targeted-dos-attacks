@@ -14,9 +14,7 @@ from time import sleep, time
 from multiprocessing import Process
 from argparse import ArgumentParser
 
-from monitor import monitor_qlen
 import numpy as np
-import termcolor as T
 
 import sys
 import os
@@ -102,16 +100,16 @@ def main():
       procs[fn.__name__] = fn(net)
 
     server = net.get('server')
+    # adjust initcwnd
+    current_config = server.cmd('ip route show').strip()
+    print 'Initial ip route config: %s' % current_config
+
+    new_config = '%s initcwnd %d' % (current_config, args.cwnd)
+    print 'Setting new config: %s' % new_config
+    server.cmd('sudo ip route change %s' % new_config, shell=True)
+
     for speed in HOST_SPEEDS:
       host = net.get('h%s' % speed)
-
-      # adjust initcwnd
-      current_config = host.cmd('ip route show').strip()
-      print 'Initial ip route config: %s' % current_config
-
-      new_config = '%s initcwnd %d' % (current_config, args.cwnd)
-      print 'Setting new config: %s' % new_config
-      host.cmd('sudo ip route change %s' % new_config)
 
       print 'Testing %d Kbps download times...' % speed
 
