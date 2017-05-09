@@ -12,13 +12,22 @@ import mininet.node
 
 class Topo(mininet.topo.Topo):
     def build(self):
-        switch = self.addSwitch('s0')
-        alice = self.addHost('h0')
-        bob = self.addHost('h1')
-        mallory = self.addHost('h2')
-        self.addLink(alice, switch, bw=1.0, delay=100, max_queue_size=20)
-        self.addLink(bob, switch, bw=1.0, delay=100, max_queue_size=20)
-        self.addLink(mallory, switch, bw=1.0, delay=100, max_queue_size=20)
+        alice = self.addHost('alice')
+        mallory = self.addHost('mallory')
+        local_switch = self.addSwitch('s0')
+        self.addLink(alice, local_switch, bw=1000.0, delay=100,
+                     max_queue_size=20)
+        self.addLink(mallory, local_switch, bw=1000.0, delay=100,
+                     max_queue_size=20)
+
+        server_switch = self.addSwitch('s1')
+        server = self.addHost('server')
+        self.addLink(server, server_switch, bw=1000.0, delay=10,
+                     max_queue_size=20)
+
+        # This is the bottleneck link: s0 <-> s1
+        self.addLink(local_switch, server_switch, bw=1.5, delay=100,
+                     max_queue_size=20)
 
 
 def start_tcpprobe(output_file='cwnd.txt'):
@@ -33,15 +42,15 @@ def stop_tcpprobe(p):
 
 
 def start_iperf(net):
-    alice = net.get('h0')
-    bob = net.get('h1')
+    alice = net.get('alice')
+    server = net.get('server')
     print('Starting iperf server on {}.'.format(alice.IP()))
-    server = alice.popen('iperf -s > alice', shell=True)
-    print('Starting iperf client on {}.'.format(bob.IP()))
-    client = bob.popen(
-        'iperf -c {} -t {} > bob'.format(alice.IP(), 600), shell=True)
+    iperf_s = alice.popen('iperf -s > server', shell=True)
+    print('Starting iperf client on {}.'.format(server.IP()))
+    iperf_c = server.popen(
+        'iperf -c {} -t {} > client'.format(alice.IP(), 600), shell=True)
     print('Iperf started on server and client.')
-    return (client, server)
+    return (iperf_c, iperf_s)
 
 
 def main():
@@ -56,9 +65,12 @@ def main():
     probe = start_tcpprobe()
     for _ in range(60):
         time.sleep(10)
-        bob = net.get('h1')
-        mallory = net.get('h2')
-        p = mallory.popen('ping -f {}'.format(bob.IP()))
+        mallory = net.get('mallory')
+        server = net.get('server')
+
+        print('Starting ICMP flood: %s -> %s' % (mallory.IP(), server.IP()))
+        p = mallory.popen('ping -f {}'.format(server.IP()))
+
         time.sleep(2)
         p.terminate()
     stop_tcpprobe(probe)
