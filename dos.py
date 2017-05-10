@@ -3,6 +3,7 @@
 from __future__ import absolute_import
 from __future__ import print_function
 
+import argparse
 import os
 import time
 import subprocess
@@ -12,24 +13,6 @@ import mininet.topo
 import mininet.net
 import mininet.node
 
-from argparse import ArgumentParser
-
-parser = ArgumentParser(description="TCP DoS simulator.")
-
-parser.add_argument('--burst', '-b',
-                    help="Burst duration in seconds of each DoS attack.",
-                    type=float,
-                    default=0.15)
-
-parser.add_argument('--cong',
-                    help="Congestion control algorithm to use.",
-                    default="reno")
-
-parser.add_argument('--period', '-p',
-                    help="Seconds between low-rate DoS attacks, e.g. 0.5",
-                    type=float,
-                    default=0.5)
-args = parser.parse_args()
 
 class Topo(mininet.topo.Topo):
     def build(self):
@@ -40,19 +23,19 @@ class Topo(mininet.topo.Topo):
         alice = self.addHost('alice')
         mallory = self.addHost('mallory')
         local_switch = self.addSwitch('s0')
-        self.addLink(alice, local_switch, bw=1000.0, delay=100,
-                     max_queue_size=20)
-        self.addLink(mallory, local_switch, bw=1000.0, delay=100,
-                     max_queue_size=20)
+        self.addLink(
+            alice, local_switch, bw=1000.0, delay=100, max_queue_size=20)
+        self.addLink(
+            mallory, local_switch, bw=1000.0, delay=100, max_queue_size=20)
 
         server_switch = self.addSwitch('s1')
         server = self.addHost('server')
-        self.addLink(server, server_switch, bw=1000.0, delay=10,
-                     max_queue_size=20)
+        self.addLink(
+            server, server_switch, bw=1000.0, delay=10, max_queue_size=20)
 
         # This is the bottleneck link: s0 <-> s1
-        self.addLink(local_switch, server_switch, bw=1.5, delay=100,
-                     max_queue_size=20)
+        self.addLink(
+            local_switch, server_switch, bw=1.5, delay=100, max_queue_size=200)
 
 
 def start_tcpprobe(output_file='cwnd.txt'):
@@ -76,19 +59,18 @@ def set_rto_min(net):
     print('Initial ip route config: %s' % current_config)
 
     new_config = '%s rto_min 1s' % current_config
-    print('Setting new config for alice (%s): %s' % (
-        alice.IP(), new_config))
+    print('Setting new config for alice (%s): %s' % (alice.IP(), new_config))
     alice.cmd('sudo ip route change %s' % new_config, shell=True)
 
 
 def start_iperf(net):
     alice = net.get('alice')
     server = net.get('server')
-    print('Starting iperf server on {}.'.format(alice.IP()))
-    iperf_s = alice.popen('iperf -s > server', shell=True)
-    print('Starting iperf client on {}.'.format(server.IP()))
-    iperf_c = server.popen(
-        'iperf -c {} -t {} > client'.format(alice.IP(), 60), shell=True)
+    print('Starting iperf server on {}.'.format(server.IP()))
+    iperf_s = server.popen('iperf -s > server', shell=True)
+    print('Starting iperf client on {}.'.format(alice.IP()))
+    iperf_c = alice.popen(
+        'iperf -c {} -t {} > client'.format(server.IP(), 60), shell=True)
     print('Iperf started on server and client.')
     return (iperf_c, iperf_s)
 
@@ -99,16 +81,33 @@ def start_attacker(net, period, burst_length):
 
     print('Starting ICMP flood: %s -> %s' % (mallory.IP(), server.IP()))
     while True:
-      print('  ** ping burst!')
-      p = mallory.popen('ping -f {}'.format(server.IP()))
-      time.sleep(burst_length)
-      p.terminate()
+        print('  ** ping burst!')
+        p = mallory.popen('ping -f {}'.format(server.IP()))
+        time.sleep(burst_length)
+        p.terminate()
 
-      # Now wait for the period-between-bursts to do the square wave attack
-      time.sleep(period)
+        # Now wait for the period-between-bursts to do the square wave attack
+        time.sleep(period)
 
 
 def main():
+    parser = argparse.ArgumentParser(description="TCP DoS simulator.")
+    parser.add_argument(
+        '--burst',
+        '-b',
+        help="Burst duration in seconds of each DoS attack.",
+        type=float,
+        default=0.15)
+    parser.add_argument(
+        '--cong', help="Congestion control algorithm to use.", default="reno")
+    parser.add_argument(
+        '--period',
+        '-p',
+        help="Seconds between low-rate DoS attacks, e.g. 0.5",
+        type=float,
+        default=0.5)
+    args = parser.parse_args()
+
     subprocess.call(
         'sysctl -q -w net.ipv4.tcp_congestion_control=%s' % args.cong,
         shell=True)
@@ -124,8 +123,8 @@ def main():
     client, server = start_iperf(net)
     probe = start_tcpprobe()
 
-    attack_thread = threading.Thread(target=start_attacker,
-                                     args=(net, args.period, args.burst))
+    attack_thread = threading.Thread(
+        target=start_attacker, args=(net, args.period, args.burst))
     attack_thread.daemon = True
     attack_thread.start()
 
