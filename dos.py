@@ -45,8 +45,12 @@ def start_tcpprobe(output_file='cwnd.txt'):
         shell=True)
 
 
-def stop_tcpprobe(p):
-    p.terminate()
+def start_bw_monitor(net, output_file='txrate.txt', interval_sec=0.01):
+    alice = net.get('alice')
+    return alice.popen(
+        'bwm-ng -t {} -o csv -u bits -T rate -C , > {}'.format(
+            interval_sec * 1000, output_file),
+        shell=True)
 
 
 # "In these experiments, we again consider the scenario of Figure 2 but
@@ -122,16 +126,17 @@ def main():
 
     client, server = start_iperf(net)
     probe = start_tcpprobe()
+    bw_monitor = start_bw_monitor(net)
 
     attack_thread = threading.Thread(
         target=start_attacker, args=(net, args.period, args.burst))
     attack_thread.daemon = True
     attack_thread.start()
 
-    client.communicate()
+    client.wait()
 
-    stop_tcpprobe(probe)
-    print('Cleaning up processes.')
+    bw_monitor.terminate()
+    probe.terminate()
     server.terminate()
     net.stop()
 
