@@ -83,7 +83,7 @@ def start_iperf(net):
         'iperf -s > /dev/null', shell=True, preexec_fn=os.setsid)
     print('Starting iperf client on {}.'.format(alice.IP()))
     iperf_c = alice.popen(
-        'iperf -c {} -t {} > /dev/null'.format(server.IP(), 10),
+        'iperf -c {} -t {} > /dev/null'.format(server.IP(), 60),
         shell=True,
         preexec_fn=os.setsid)
     print('Iperf started on server and client.')
