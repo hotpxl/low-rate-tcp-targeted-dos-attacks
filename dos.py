@@ -38,6 +38,7 @@ class Topo(mininet.topo.Topo):
         self.addLink(
             local_switch, server_switch, bw=1.5, delay=100, max_queue_size=200)
 
+
 def terminate_process(p):
     os.killpg(os.getpgid(p.pid), signal.SIGTERM)
 
@@ -46,9 +47,9 @@ def start_tcpprobe(output_file='cwnd.txt'):
     subprocess.check_call(
         'rmmod tcp_probe; modprobe tcp_probe full=1', shell=True)
     return subprocess.Popen(
-        'dd if=/proc/net/tcpprobe ibs=128 obs=128 > {}'.format(
-            output_file),
-        shell=True, preexec_fn=os.setsid)
+        'dd if=/proc/net/tcpprobe ibs=128 obs=128 > {}'.format(output_file),
+        shell=True,
+        preexec_fn=os.setsid)
 
 
 def start_bw_monitor(net, output_file='txrate.txt', interval_sec=0.01):
@@ -56,7 +57,8 @@ def start_bw_monitor(net, output_file='txrate.txt', interval_sec=0.01):
     return alice.popen(
         'bwm-ng -t {} -o csv -u bits -T rate -C , > {}'.format(
             interval_sec * 1000, output_file),
-        shell=True, preexec_fn=os.setsid)
+        shell=True,
+        preexec_fn=os.setsid)
 
 
 # "In these experiments, we again consider the scenario of Figure 2 but
@@ -77,21 +79,25 @@ def start_iperf(net):
     alice = net.get('alice')
     server = net.get('server')
     print('Starting iperf server on {}.'.format(server.IP()))
-    iperf_s = server.popen('iperf -s > /dev/null', shell=True, preexec_fn=os.setsid)
+    iperf_s = server.popen(
+        'iperf -s > /dev/null', shell=True, preexec_fn=os.setsid)
     print('Starting iperf client on {}.'.format(alice.IP()))
     iperf_c = alice.popen(
-        'iperf -c {} -t {} > /dev/null'.format(server.IP(), 10), shell=True, preexec_fn=os.setsid)
+        'iperf -c {} -t {} > /dev/null'.format(server.IP(), 10),
+        shell=True,
+        preexec_fn=os.setsid)
     print('Iperf started on server and client.')
     return (iperf_c, iperf_s)
 
 
-def run_attacker(net, period, burst_length):
+def run_attacker(net, period, burst_length, shutdown_event):
     mallory = net.get('mallory')
     server = net.get('server')
 
     print('Starting ICMP flood: %s -> %s' % (mallory.IP(), server.IP()))
-    while True:
-        p = mallory.popen('ping -f {}'.format(server.IP()), shell=True, preexec_fn=os.setsid)
+    while not shutdown_event.is_set():
+        p = mallory.popen(
+            'ping -f {}'.format(server.IP()), shell=True, preexec_fn=os.setsid)
         time.sleep(burst_length)
         terminate_process(p)
         # Now wait for the period-between-bursts to do the square wave
@@ -134,13 +140,17 @@ def main():
     output_file = 'tx-%s.txt' % args.period
     bw_monitor = start_bw_monitor(net, output_file=output_file)
 
+    shutdown_event = threading.Event()
     attack_thread = threading.Thread(
-        target=run_attacker, args=(net, args.period, args.burst))
+        target=run_attacker,
+        args=(net, args.period, args.burst, shutdown_event))
     attack_thread.daemon = True
     attack_thread.start()
 
     client.wait()
 
+    shutdown_event.set()
+    attack_thread.join()
     terminate_process(bw_monitor)
     terminate_process(probe)
     terminate_process(server)
