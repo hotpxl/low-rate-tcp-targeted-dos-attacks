@@ -71,10 +71,10 @@ def start_iperf(net):
     alice = net.get('alice')
     server = net.get('server')
     print('Starting iperf server on {}.'.format(server.IP()))
-    iperf_s = server.popen('iperf -s > server', shell=True)
+    iperf_s = server.popen('iperf -s > /dev/null', shell=True)
     print('Starting iperf client on {}.'.format(alice.IP()))
     iperf_c = alice.popen(
-        'iperf -c {} -t {} > client'.format(server.IP(), 60), shell=True)
+        'iperf -c {} -t {} > /dev/null'.format(server.IP(), 60), shell=True)
     print('Iperf started on server and client.')
     return (iperf_c, iperf_s)
 
