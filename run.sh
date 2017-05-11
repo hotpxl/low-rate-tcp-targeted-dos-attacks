@@ -10,5 +10,7 @@ for period in $(seq 0 0.1 2); do
     mn -c 2> /dev/null
     killall -9 iperf 2> /dev/null || true
     killall -9 ping 2> /dev/null || true
+    killall -9 dd 2> /dev/null || true
+    killall -9 bwm-ng 2> /dev/null || true
     python dos.py --period "${period}"
 done
