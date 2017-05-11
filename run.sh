@@ -8,4 +8,6 @@ mn -c
 killall -9 iperf
 killall -9 ping
 
-python dos.py
+for period in $(seq 0 0.1 2); do
+    python dos.py --period $period
+done

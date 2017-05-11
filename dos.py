@@ -79,19 +79,21 @@ def start_iperf(net):
     return (iperf_c, iperf_s)
 
 
-def start_attacker(net, period, burst_length):
+def run_attacker(net, period, burst_length):
     mallory = net.get('mallory')
     server = net.get('server')
 
     print('Starting ICMP flood: %s -> %s' % (mallory.IP(), server.IP()))
     while True:
-        print('  ** ping burst!')
-        p = mallory.popen('ping -f {}'.format(server.IP()))
-        time.sleep(burst_length)
-        p.terminate()
+        try:
+            p = mallory.popen('ping -f {}'.format(server.IP()))
+            time.sleep(burst_length)
+            p.terminate()
 
-        # Now wait for the period-between-bursts to do the square wave attack
-        time.sleep(period)
+            # Now wait for the period-between-bursts to do the square wave
+            time.sleep(period)
+        except:
+            break
 
 
 def main():
@@ -126,10 +128,12 @@ def main():
 
     client, server = start_iperf(net)
     probe = start_tcpprobe()
-    bw_monitor = start_bw_monitor(net)
+
+    output_file = 'tx-%s.txt' % args.period
+    bw_monitor = start_bw_monitor(net, output_file=output_file)
 
     attack_thread = threading.Thread(
-        target=start_attacker, args=(net, args.period, args.burst))
+        target=run_attacker, args=(net, args.period, args.burst))
     attack_thread.daemon = True
     attack_thread.start()
 
@@ -139,6 +143,8 @@ def main():
     probe.terminate()
     server.terminate()
     net.stop()
+
+    attack_thread.join()
 
 
 if __name__ == '__main__':
