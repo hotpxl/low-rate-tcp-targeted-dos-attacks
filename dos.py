@@ -39,9 +39,11 @@ class Topo(mininet.topo.Topo):
 
 
 def start_tcpprobe(output_file='cwnd.txt'):
-    subprocess.call('rmmod tcp_probe; modprobe tcp_probe full=1', shell=True)
+    subprocess.check_call(
+        'rmmod tcp_probe; modprobe tcp_probe full=1', shell=True)
     return subprocess.Popen(
-        'dd if=/proc/net/tcpprobe ibs=128 obs=128 > {}'.format(output_file),
+        'dd if=/proc/net/tcpprobe ibs=128 obs=128 conv=noerror > {}'.format(
+            output_file),
         shell=True)
 
 
@@ -85,15 +87,11 @@ def run_attacker(net, period, burst_length):
 
     print('Starting ICMP flood: %s -> %s' % (mallory.IP(), server.IP()))
     while True:
-        try:
-            p = mallory.popen('ping -f {}'.format(server.IP()))
-            time.sleep(burst_length)
-            p.terminate()
-
-            # Now wait for the period-between-bursts to do the square wave
-            time.sleep(period)
-        except:
-            break
+        p = mallory.popen('ping -f {}'.format(server.IP()))
+        time.sleep(burst_length)
+        p.terminate()
+        # Now wait for the period-between-bursts to do the square wave
+        time.sleep(period)
 
 
 def main():
@@ -143,8 +141,6 @@ def main():
     probe.terminate()
     server.terminate()
     net.stop()
-
-    attack_thread.join()
 
 
 if __name__ == '__main__':
