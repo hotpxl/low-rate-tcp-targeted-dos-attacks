@@ -2,6 +2,10 @@
 
 # Note: Mininet must be run as root.  So invoke this shell script
 # using sudo.
+if [[ "${UID}" -ne 0 ]]; then
+    echo "You must be root to run this."
+    exit 1
+fi
 
 # Do some cleanup first.
 mn -c
