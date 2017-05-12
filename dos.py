@@ -139,7 +139,7 @@ def main():
     client, server = start_iperf(net)
     probe = start_tcpprobe()
 
-    output_file = 'tx-%s.txt' % args.period
+    output_file = 'tx-{}-{}.txt'.format(args.period, args.burst)
     bw_monitor = start_bw_monitor(net, output_file=output_file)
 
     shutdown_event = threading.Event()
