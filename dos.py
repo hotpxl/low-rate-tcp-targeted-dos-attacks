@@ -4,6 +4,7 @@ from __future__ import absolute_import
 from __future__ import print_function
 
 import argparse
+import socket
 import os
 import time
 import subprocess
@@ -94,14 +95,15 @@ def run_attacker(net, period, burst_length, shutdown_event):
     mallory = net.get('mallory')
     server = net.get('server')
 
-    print('Starting ICMP flood: %s -> %s' % (mallory.IP(), server.IP()))
-    while not shutdown_event.is_set():
-        p = mallory.popen(
-            'ping -f {}'.format(server.IP()), shell=True, preexec_fn=os.setsid)
-        time.sleep(burst_length)
-        terminate_process(p)
-        # Now wait for the period-between-bursts to do the square wave
-        time.sleep(period)
+    data = '0' * 1024
+
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    print('Starting UDP flood: %s -> %s.' % (mallory.IP(), server.IP()))
+    while not shutdown_event.wait(period):
+        start_time = time.time()
+        while time.time() - start_time < burst_length:
+            sock.sendto(data, (server.IP(), 80))
+    sock.close()
 
 
 def main():

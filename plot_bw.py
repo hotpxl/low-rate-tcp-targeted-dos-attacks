@@ -7,7 +7,7 @@ import numpy as np
 
 def main():
     plt.figure(figsize=(20, 40))
-    files = [i for i in os.listdir() if i.startswith('tx-')]
+    files = [i for i in os.listdir('.') if i.startswith('tx-')]
     for idx, f in enumerate(files):
         period = float(f[3:-4])
         with open(f) as f:
