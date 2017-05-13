@@ -4,12 +4,10 @@ from __future__ import absolute_import
 from __future__ import print_function
 
 import argparse
-import socket
 import os
 import time
 import subprocess
 import signal
-import threading
 
 import mininet.topo
 import mininet.net
@@ -25,12 +23,12 @@ class Topo(mininet.topo.Topo):
         alice = self.addHost('alice')
         mallory = self.addHost('mallory')
         local_switch = self.addSwitch('s0')
-        self.addLink(alice, local_switch, bw=1000.0, max_queue_size=5)
-        self.addLink(mallory, local_switch, bw=1000.0, max_queue_size=5)
+        self.addLink(alice, local_switch, bw=1.5, max_queue_size=5)
+        self.addLink(mallory, local_switch, bw=1.5, max_queue_size=5)
 
         server_switch = self.addSwitch('s1')
         server = self.addHost('server')
-        self.addLink(server, server_switch, bw=1000.0, max_queue_size=5)
+        self.addLink(server, server_switch, bw=1.5, max_queue_size=5)
 
         # This is the bottleneck link: s0 <-> s1
         self.addLink(local_switch, server_switch, bw=1.5, max_queue_size=10)
@@ -101,19 +99,14 @@ def run_flow(net):
     return time.time() - start
 
 
-def run_attacker(net, period, burst_length, shutdown_event):
+def start_attack(net, period, burst):
     mallory = net.get('mallory')
     server = net.get('server')
 
-    data = '0' * 1024
-
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    print('Starting UDP flood: %s -> %s.' % (mallory.IP(), server.IP()))
-    while not shutdown_event.wait(period):
-        start_time = time.time()
-        while time.time() - start_time < burst_length:
-            sock.sendto(data, (server.IP(), 80))
-    sock.close()
+    return mallory.popen([
+        'python', 'run_attacker.py', '--period', str(period), '--burst',
+        str(burst), '--destination', server.IP()
+    ])
 
 
 def main():
@@ -146,20 +139,14 @@ def main():
     set_rto_min(net)
 
     probe = start_tcpprobe()
-    shutdown_event = threading.Event()
-    attack_thread = threading.Thread(
-        target=run_attacker,
-        args=(net, args.period, args.burst, shutdown_event))
-    attack_thread.daemon = True
-    attack_thread.start()
+    attack = start_attack(net, args.period, args.burst)
 
     t = run_flow(net)
     output_file = 'tx-{}-{}.txt'.format(args.period, args.burst)
     with open(output_file, 'w') as f:
-        f.write(str(t))
+        f.write(str(t) + '\n')
 
-    shutdown_event.set()
-    attack_thread.join()
+    attack.terminate()
     os.killpg(os.getpgid(probe.pid), signal.SIGTERM)
     net.stop()
 
