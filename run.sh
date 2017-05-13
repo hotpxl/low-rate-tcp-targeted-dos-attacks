@@ -7,7 +7,7 @@ if [[ "${UID}" -ne 0 ]]; then
 fi
 
 for burst in $(seq 0.1 0.2 0.5); do
-  for period in $(seq 0 0.2 2); do
+  for period in $(seq 0.2 0.2 2); do
     mn -c 2> /dev/null
     killall -9 dd nc 2> /dev/null || true
     python dos.py --period "${period}" --burst "${burst}"
