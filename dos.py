@@ -25,23 +25,29 @@ class Topo(mininet.topo.Topo):
         alice = self.addHost('alice')
         mallory = self.addHost('mallory')
         local_switch = self.addSwitch('s0')
-        self.addLink(
-            alice, local_switch, bw=1000.0, delay=100, max_queue_size=20)
-        self.addLink(
-            mallory, local_switch, bw=1000.0, delay=100, max_queue_size=20)
+        self.addLink(alice, local_switch, bw=1000.0, max_queue_size=5)
+        self.addLink(mallory, local_switch, bw=1000.0, max_queue_size=5)
 
         server_switch = self.addSwitch('s1')
         server = self.addHost('server')
-        self.addLink(
-            server, server_switch, bw=1000.0, delay=10, max_queue_size=20)
+        self.addLink(server, server_switch, bw=1000.0, max_queue_size=5)
 
         # This is the bottleneck link: s0 <-> s1
-        self.addLink(
-            local_switch, server_switch, bw=1.5, delay=100, max_queue_size=200)
+        self.addLink(local_switch, server_switch, bw=1.5, max_queue_size=10)
 
 
 def terminate_process(p):
-    os.killpg(os.getpgid(p.pid), signal.SIGTERM)
+    assert False, 'Disabled.'
+    pid_set = set()
+    pid_set.add(os.getpgid(p.pid))
+    pids = subprocess.check_output(
+        'ps -o pid= --ppid {}'.format(p.pid), shell=True)
+    for pp in pids.strip().split('\n'):
+        pid_set.add(os.getpgid(int(pp)))
+    for i in pid_set:
+        print('kill ', i)
+        os.killpg(i, signal.SIGTERM)
+        time.sleep(1)
 
 
 def start_tcpprobe(output_file='cwnd.txt'):
@@ -54,6 +60,7 @@ def start_tcpprobe(output_file='cwnd.txt'):
 
 
 def start_bw_monitor(net, output_file='txrate.txt', interval_sec=0.01):
+    assert False, 'Disabled.'
     alice = net.get('alice')
     return alice.popen(
         'bwm-ng -t {} -o csv -u bits -T rate -C , > {}'.format(
@@ -76,19 +83,22 @@ def set_rto_min(net):
     alice.cmd('sudo ip route change %s' % new_config, shell=True)
 
 
-def start_iperf(net):
+def run_flow(net):
     alice = net.get('alice')
     server = net.get('server')
-    print('Starting iperf server on {}.'.format(server.IP()))
-    iperf_s = server.popen(
-        'iperf -s > /dev/null', shell=True, preexec_fn=os.setsid)
-    print('Starting iperf client on {}.'.format(alice.IP()))
-    iperf_c = alice.popen(
-        'iperf -c {} -t {} > /dev/null'.format(server.IP(), 60),
-        shell=True,
-        preexec_fn=os.setsid)
-    print('Iperf started on server and client.')
-    return (iperf_c, iperf_s)
+    print('Starting receiver on {}.'.format(server.IP()))
+    s = server.popen('nc -l -p 12345 > /dev/null', shell=True)
+    # Wait for receiver to start listening.
+    time.sleep(1)
+    print('Starting sender on {}.'.format(alice.IP()))
+    start = time.time()
+    c = alice.popen('./run_sender.sh {}'.format(server.IP()), shell=True)
+    print('TCP flow started on server and client.')
+    r = c.wait()
+    assert r == 0
+    r = s.wait()
+    assert r == 0
+    return time.time() - start
 
 
 def run_attacker(net, period, burst_length, shutdown_event):
@@ -133,15 +143,9 @@ def main():
         topo=topo, host=mininet.node.CPULimitedHost, link=mininet.link.TCLink)
     net.start()
     net.pingAll()
-
     set_rto_min(net)
 
-    client, server = start_iperf(net)
     probe = start_tcpprobe()
-
-    output_file = 'tx-{}-{}.txt'.format(args.period, args.burst)
-    bw_monitor = start_bw_monitor(net, output_file=output_file)
-
     shutdown_event = threading.Event()
     attack_thread = threading.Thread(
         target=run_attacker,
@@ -149,13 +153,14 @@ def main():
     attack_thread.daemon = True
     attack_thread.start()
 
-    client.wait()
+    t = run_flow(net)
+    output_file = 'tx-{}-{}.txt'.format(args.period, args.burst)
+    with open(output_file, 'w') as f:
+        f.write(str(t))
 
     shutdown_event.set()
     attack_thread.join()
-    terminate_process(bw_monitor)
-    terminate_process(probe)
-    terminate_process(server)
+    os.killpg(os.getpgid(probe.pid), signal.SIGTERM)
     net.stop()
 
 
