@@ -49,6 +49,7 @@ def terminate_process(p):
 
 
 def start_tcpprobe(output_file='cwnd.txt'):
+    assert False, 'Disabled.'
     subprocess.check_call(
         'rmmod tcp_probe; modprobe tcp_probe full=1', shell=True)
     return subprocess.Popen(
@@ -138,7 +139,6 @@ def main():
     net.pingAll()
     set_rto_min(net)
 
-    probe = start_tcpprobe()
     attack = start_attack(net, args.period, args.burst)
 
     t = run_flow(net)
@@ -147,7 +147,6 @@ def main():
         f.write(str(t) + '\n')
 
     attack.terminate()
-    os.killpg(os.getpgid(probe.pid), signal.SIGTERM)
     net.stop()
 
 
