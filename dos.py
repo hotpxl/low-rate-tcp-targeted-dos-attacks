@@ -4,6 +4,7 @@ from __future__ import absolute_import
 from __future__ import print_function
 
 import argparse
+import numpy as np
 import os
 import time
 import subprocess
@@ -17,21 +18,28 @@ import mininet.node
 class Topo(mininet.topo.Topo):
     def build(self):
         # Topology:
-        #  A (alice) ------+
-        #                  |--[s0]----[s1]----server
-        #  M (mallory) ----+
-        alice = self.addHost('alice')
-        mallory = self.addHost('mallory')
+        #  A (alice) ------+                    +---- server
+        #                  |--[s0]----[s1]------|
+        #  B (bob)  -------+                    +---- mallory (attacker)
         local_switch = self.addSwitch('s0')
-        self.addLink(alice, local_switch, bw=1.5, max_queue_size=5)
-        self.addLink(mallory, local_switch, bw=1.5, max_queue_size=5)
+
+        alice = self.addHost('alice')
+        self.addLink(alice, local_switch, bw=15, delay='1ms')
+
+        bob = self.addHost('bob')
+        self.addLink(bob, local_switch, bw=15, delay='1ms')
 
         server_switch = self.addSwitch('s1')
+
         server = self.addHost('server')
-        self.addLink(server, server_switch, bw=1.5, max_queue_size=5)
+        self.addLink(server, server_switch, bw=15, delay='1ms')
+
+        mallory = self.addHost('mallory')
+        self.addLink(mallory, server_switch, bw=15, delay='1ms')
 
         # This is the bottleneck link: s0 <-> s1
-        self.addLink(local_switch, server_switch, bw=1.5, max_queue_size=10)
+        self.addLink(local_switch, server_switch, bw=1.5,
+                     delay='50ms', max_queue_size=20000)
 
 
 def terminate_process(p):
@@ -48,38 +56,28 @@ def terminate_process(p):
         time.sleep(1)
 
 
-def start_tcpprobe(output_file='cwnd.txt'):
-    assert False, 'Disabled.'
-    subprocess.check_call(
-        'rmmod tcp_probe; modprobe tcp_probe full=1', shell=True)
-    return subprocess.Popen(
-        'dd if=/proc/net/tcpprobe ibs=128 obs=128 > {}'.format(output_file),
-        shell=True,
-        preexec_fn=os.setsid)
-
-
-def start_bw_monitor(net, output_file='txrate.txt', interval_sec=0.01):
-    assert False, 'Disabled.'
-    alice = net.get('alice')
-    return alice.popen(
-        'bwm-ng -t {} -o csv -u bits -T rate -C , > {}'.format(
-            interval_sec * 1000, output_file),
-        shell=True,
-        preexec_fn=os.setsid)
+def start_webserver(net):
+    server = net.get('server')
+    print('Starting webserver on: %s' % server.IP())
+    proc = server.popen("python http/webserver.py", shell=True)
+    time.sleep(1)
+    return proc
 
 
 # "In these experiments, we again consider the scenario of Figure 2 but
 # with a single TCP flow.4 The TCP Reno flow has minRTO = 1 second and
 # satisfies conditions (C1) and (C2)."
-def set_rto_min(net):
+def set_rto_min(net, min_rto_ms):
     # From: https://serverfault.com/questions/529347/how-to-apply-rto-min-to-a-certain-host-in-centos
-    alice = net.get('alice')
-    current_config = alice.cmd('ip route show').strip()
-    print('Initial ip route config: %s' % current_config)
+    for host in ['alice', 'server']:
+        node = net.get(host)
+        current_config = node.cmd('ip route show').strip()
+        print('Initial ip route config: %s' % current_config)
 
-    new_config = '%s rto_min 1s' % current_config
-    print('Setting new config for alice (%s): %s' % (alice.IP(), new_config))
-    alice.cmd('sudo ip route change %s' % new_config, shell=True)
+        new_config = '%s rto_min %dms' % (current_config, min_rto_ms)
+        print('Setting new config for %s (%s): %s' %
+              (host, node.IP(), new_config))
+        node.cmd('sudo ip route change %s' % new_config, shell=True)
 
 
 def run_flow(net):
@@ -102,12 +100,38 @@ def run_flow(net):
 
 def start_attack(net, period, burst):
     mallory = net.get('mallory')
-    server = net.get('server')
+    victim = net.get('bob')
 
     return mallory.popen([
         'python', 'run_attacker.py', '--period', str(period), '--burst',
-        str(burst), '--destination', server.IP()
+        str(burst), '--destination', victim.IP()
     ])
+
+
+def run_download(net):
+    server = net.get('server')
+    host = net.get('alice')
+    measured_bps = []
+
+    filename = 'http/cat.png'
+
+    for i in xrange(5):
+        time.sleep(2)
+
+        start = time.time()
+        print('Run %d. Starting download of: %s' % (i + 1, filename))
+        host.cmd(
+            'curl -o /dev/null --progress-bar --verbose '
+            '%s/%s' % (server.IP(), filename), shell=True)
+        end = time.time()
+        measured_time = end - start
+        file_size = os.stat(filename).st_size
+        bps = (file_size * 8.0) / measured_time
+
+        print('   fetch time: %.2f sec, %.2f bps' % (measured_time, bps))
+        measured_bps.append(bps)
+
+    return np.mean(measured_bps)
 
 
 def main():
@@ -126,6 +150,8 @@ def main():
         help="Seconds between low-rate DoS attacks, e.g. 0.5",
         type=float,
         default=0.5)
+    parser.add_argument(
+        '--rto', '-r', help="rto_min value, in ms", type=int, default=1000)
     args = parser.parse_args()
 
     subprocess.call(
@@ -137,15 +163,16 @@ def main():
         topo=topo, host=mininet.node.CPULimitedHost, link=mininet.link.TCLink)
     net.start()
     net.pingAll()
-    set_rto_min(net)
+    set_rto_min(net, args.rto)
+
+    webserver = start_webserver(net)
 
     attack = start_attack(net, args.period, args.burst)
 
-    t = run_flow(net)
-    output_file = 'tx-{}-{}.txt'.format(args.period, args.burst)
-    with open(output_file, 'w') as f:
-        f.write(str(t) + '\n')
+    mean_bps = run_download(net)
+    print('rto %d period %.2f: %.4f bps' % (args.rto, args.period, mean_bps))
 
+    webserver.terminate()
     attack.terminate()
     net.stop()
 
