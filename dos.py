@@ -18,28 +18,35 @@ import mininet.node
 class Topo(mininet.topo.Topo):
     def build(self):
         # Topology:
-        #  A (alice) ------+                    +---- server
+        #  A (alice) ------+                    +---- sender
         #                  |--[s0]----[s1]------|
         #  B (bob)  -------+                    +---- mallory (attacker)
+        #
+        # Sender sends a normal TCP Reno flow to alice using nc.
+        # attacker performs the square wave DoS attack against Bob's IP.
         local_switch = self.addSwitch('s0')
 
         alice = self.addHost('alice')
-        self.addLink(alice, local_switch, bw=15, delay='1ms')
+        self.addLink(alice, local_switch, bw=15,
+                     delay='1ms', max_queue_size=1000)
 
         bob = self.addHost('bob')
-        self.addLink(bob, local_switch, bw=15, delay='1ms')
+        self.addLink(bob, local_switch, bw=15,
+                     delay='1ms', max_queue_size=1000)
 
         server_switch = self.addSwitch('s1')
 
-        server = self.addHost('server')
-        self.addLink(server, server_switch, bw=15, delay='1ms')
+        sender = self.addHost('sender')
+        self.addLink(sender, server_switch, bw=15,
+                     delay='1ms', max_queue_size=1000)
 
         mallory = self.addHost('mallory')
-        self.addLink(mallory, server_switch, bw=15, delay='1ms')
+        self.addLink(mallory, server_switch, bw=15,
+                     delay='1ms', max_queue_size=1000)
 
         # This is the bottleneck link: s0 <-> s1
-        self.addLink(local_switch, server_switch, bw=1.5,
-                     delay='50ms', max_queue_size=20000)
+        self.addLink(server_switch, local_switch, bw=150,
+                     delay='1ms', max_queue_size=1500)
 
 
 def terminate_process(p):
@@ -56,11 +63,22 @@ def terminate_process(p):
         time.sleep(1)
 
 
-def start_webserver(net):
-    server = net.get('server')
-    print('Starting webserver on: %s' % server.IP())
-    proc = server.popen("python http/webserver.py", shell=True)
-    time.sleep(1)
+def start_receiver(net):
+  alice = net.get('alice')
+  print('Starting nc receiver on: %s' % alice.IP())
+
+  proc = alice.popen('nc -l 12345', shell=True)
+  time.sleep(1)
+  return proc
+
+
+def start_sender(net):
+    sender = net.get('sender')
+    alice = net.get('alice')
+
+    print('Starting TCP flow from sender %s to: %s' %
+          (sender.IP(), alice.IP()))
+    proc = sender.popen("./run_sender.sh %s" % alice.IP(), shell=True)
     return proc
 
 
@@ -69,7 +87,7 @@ def start_webserver(net):
 # satisfies conditions (C1) and (C2)."
 def set_rto_min(net, min_rto_ms):
     # From: https://serverfault.com/questions/529347/how-to-apply-rto-min-to-a-certain-host-in-centos
-    for host in ['alice', 'server']:
+    for host in ['alice', 'sender']:
         node = net.get(host)
         current_config = node.cmd('ip route show').strip()
         print('Initial ip route config: %s' % current_config)
@@ -101,6 +119,8 @@ def run_flow(net):
 def start_attack(net, period, burst):
     mallory = net.get('mallory')
     victim = net.get('bob')
+    print('** Starting UDP DoS attack run! %s -> %s' % (mallory.IP(),
+                                                        victim.IP()))
 
     return mallory.popen([
         'python', 'run_attacker.py', '--period', str(period), '--burst',
@@ -165,15 +185,27 @@ def main():
     net.pingAll()
     set_rto_min(net, args.rto)
 
-    webserver = start_webserver(net)
+    r = start_receiver(net)
+    time.sleep(1)
 
-    attack = start_attack(net, args.period, args.burst)
+    s = start_sender(net)
+    start_time = time.time()
 
-    mean_bps = run_download(net)
-    print('rto %d period %.2f: %.4f bps' % (args.rto, args.period, mean_bps))
+#    print('starting attack in 3 seconds...')
+#    time.sleep(3)
+#    attack = start_attack(net, args.period, args.burst)
 
-    webserver.terminate()
-    attack.terminate()
+    stdout, stderr = s.communicate()
+    print(stdout)
+    print(stderr)
+    end_time = time.time()
+    print('time: %.3f' % (end_time - start_time))
+
+#    mean_bps = run_download(net)
+#    print('rto %d period %.2f: %.4f bps' % (args.rto, args.period, mean_bps))
+
+#    webserver.terminate()
+#    attack.terminate()
     net.stop()
 
 
