@@ -5,4 +5,4 @@ if [[ $# -ne 1 ]]; then
   exit 1
 fi
 
-dd if=/dev/zero bs=50000 count=1 | nc "$1" 12345
+dd if=/dev/zero bs=1MB count=1 | nc "$1" 12345

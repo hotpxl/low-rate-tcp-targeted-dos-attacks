@@ -12,23 +12,23 @@ import numpy as np
 
 
 def main():
-    files = [i for i in os.listdir('.') if i.startswith('tx-')]
+    files = [i for i in os.listdir('.') if i.startswith('t-')]
     if len(files) == 0:
         print('No input files.')
         sys.exit(1)
     bursts = {}
     for f in files:
-        period, burst = tuple(map(float, f[3:-4].split('-')))
+        period, burst = tuple(map(float, f[2:-4].split('-')))
         bursts.setdefault(burst, [])
         with open(f) as f:
-            # Transferred 80 Mbits.
-            t = 80 / float(f.readline().strip())
+            # Transferred 8 Mbits.
+            t = 8 / float(f.readline().strip())
             bursts[burst].append((period, t))
     for burst in bursts:
         plt.plot(*zip(*sorted(bursts[burst])), label='burst: {}'.format(burst))
     plt.xlabel('Period (s)')
     plt.ylabel('Average rate (Mbits/s)')
-    plt.legend()
+    plt.legend(loc='best')
     plt.savefig('tx.png', bbox_inches='tight')
 
 
