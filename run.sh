@@ -6,11 +6,24 @@ if [[ "${UID}" -ne 0 ]]; then
   exit 1
 fi
 
-for period in $(seq 0.5 0.1 2.0); do
-  for burst in $(seq 0.05 0.05 0.2); do
+START_TIME=`date +%Y%m%d-%H%M%S`
+echo "Run $START_TIME started."
+
+for burst in $(seq 0.15 0.05 0.3); do
+  for period in $(seq 0.5 0.1 2.0); do
     mn -c 2> /dev/null
     killall -9 python dd nc tshark dumpcap || true
-    python dos.py --rto=1000 --period "${period}" --burst "${burst}"
+
+   echo ""
+   echo "Starting attack, burst=${burst}, period=${period}"
+
+    python dos.py --rto=1000 --period "${period}" --burst "${burst}" \
+                  --suffix ${START_TIME}
     killall -9 python dd nc tshark dumpcap || true
+
+    echo ""
+    echo "Done."
+
+    sleep 5s
   done
 done

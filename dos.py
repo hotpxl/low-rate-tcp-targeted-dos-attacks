@@ -25,16 +25,20 @@ class Topo(mininet.topo.Topo):
         local_switch = self.addSwitch('s0')
         alice = self.addHost('alice')
         self.addLink(
-            alice, local_switch, bw=1000, delay='1ms', max_queue_size=10)
+            alice, local_switch, bw=100, delay='1ms', max_queue_size=10)
         mallory = self.addHost('mallory')
         self.addLink(
-            mallory, local_switch, bw=1000, delay='1ms', max_queue_size=10)
+            mallory, local_switch, bw=100, delay='1ms', max_queue_size=10)
+
+        # bob is the recipient of both the normal flow and the
+        # malicious attack flow...
         server_switch = self.addSwitch('s1')
         bob = self.addHost('bob')
         self.addLink(
-            bob, server_switch, bw=1000, delay='1ms', max_queue_size=10)
+            bob, server_switch, bw=100, delay='1ms', max_queue_size=10)
         self.addLink(
-            server_switch, local_switch, bw=1, delay='1ms', max_queue_size=100)
+            server_switch, local_switch, bw=1.5, delay='20ms',
+            max_queue_size=1000)
 
 
 # "In these experiments, we again consider the scenario of Figure 2 but
@@ -89,6 +93,9 @@ def main():
     parser.add_argument(
         '--cong', help="Congestion control algorithm to use.", default='reno')
     parser.add_argument(
+        '--suffix', '-s', help="Suffix for output directory",
+        type=str, default='')
+    parser.add_argument(
         '--period',
         '-p',
         help="Seconds between low-rate DoS attacks, e.g. 0.5",
@@ -114,11 +121,22 @@ def main():
     print('Alice\'s IP is {}.'.format(net.get('alice').IP()))
     print('Bob\'s IP is {}.'.format(net.get('bob').IP()))
     print('Mallory\'s IP is {}.'.format(net.get('mallory').IP()))
+    print('')
 
     attack = start_attack(net, args.period, args.burst)
+
     t = run_flow(net)
-    print(t)
-    with open('t-{}-{}.txt'.format(args.period, args.burst), 'w') as f:
+    print('Sending completed in %.4f seconds.' % t)
+
+    output_dir = 'results'
+    if args.suffix:
+        output_dir += '-' + args.suffix
+
+    if not os.path.isdir(output_dir):
+        os.mkdir(output_dir)
+    fname = os.path.join(output_dir,
+                         't-{}-{}.txt'.format(args.period, args.burst))
+    with open(fname, 'w') as f:
         f.write(str(t) + '\n')
 
     attack.terminate()

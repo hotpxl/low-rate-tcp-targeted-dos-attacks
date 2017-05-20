@@ -1,3 +1,3 @@
 #!/bin/bash
 
-sudo rm -f *.txt client server *.png
+sudo rm -f *.txt results/*.txt *.png
