@@ -7,9 +7,10 @@ if [[ "${UID}" -ne 0 ]]; then
 fi
 
 START_TIME=`date +%Y%m%d-%H%M%S`
-echo "Run $START_TIME started."
+HOSTNAME=`hostname`
+echo "Run $START_TIME on $HOSTNAME started."
 
-for burst in $(seq 0.15 0.05 0.3); do
+for burst in $(seq 0.15 0.05 0.25); do
   for period in $(seq 0.5 0.1 2.0); do
     mn -c 2> /dev/null
     killall -9 python dd nc tshark dumpcap || true
@@ -18,7 +19,7 @@ for burst in $(seq 0.15 0.05 0.3); do
    echo "Starting attack, burst=${burst}, period=${period}"
 
     python dos.py --rto=1000 --period "${period}" --burst "${burst}" \
-                  --suffix ${START_TIME}
+                  --suffix "${HOSTNAME}-${START_TIME}"
     killall -9 python dd nc tshark dumpcap || true
 
     echo ""
@@ -27,3 +28,5 @@ for burst in $(seq 0.15 0.05 0.3); do
     sleep 5s
   done
 done
+
+su $SUDO_USER -c ./plot_bw.py
