@@ -11,6 +11,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 import sys
 
+TRANSFER_MB = 2        # Data transfered in megabytes
+BOTTLENECK_LINK = 1.5  # Mbps
+
 
 def main():
     dir_names = [f for f in os.listdir('.')
@@ -25,13 +28,15 @@ def main():
             bursts.setdefault(burst, [])
             with open(full_path) as f:
                 # Transferred 2MBytes = 16 Mbits.
-                t = 16 / float(f.readline().strip())
-                bursts[burst].append((period, t))
+                tx_time = float(f.readline().strip())
+                tx_rate = (TRANSFER_MB * 8) / tx_time
+                normalized_rate = tx_rate / BOTTLENECK_LINK
+                bursts[burst].append((period, normalized_rate))
         for burst in bursts:
             plt.plot(*zip(*sorted(bursts[burst])),
                      label='burst: {}'.format(burst))
         plt.xlabel('Period (s)')
-        plt.ylabel('Average rate (Mbits/s)')
+        plt.ylabel('Normalized throughput')
         plt.legend(loc='best')
         plt.savefig('%s.png' % dir_name, bbox_inches='tight')
 
