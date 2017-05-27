@@ -43,7 +43,7 @@ def main():
         plt.xlabel('Time (s)')
         plt.ylabel('Congestion window size (MSS)')
         plt.legend(loc='best')
-        plt.savefig('{}.png'.format(dir_name), bbox_inches='tight')
+        plt.savefig('{}_cwnd.png'.format(dir_name), bbox_inches='tight')
 
 
 if __name__ == '__main__':

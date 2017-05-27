@@ -40,7 +40,7 @@ def main():
         plt.xlabel('Period (s)')
         plt.ylabel('Normalized throughput')
         plt.legend(loc='best')
-        plt.savefig('%s.png' % dir_name, bbox_inches='tight')
+        plt.savefig('{}_rate.png'.format(dir_name), bbox_inches='tight')
 
 
 if __name__ == '__main__':
