@@ -31,8 +31,8 @@ for burst in $(seq 0.15 0.05 ${max_burst}); do
     mn -c 2> /dev/null
     killall -9 python dd nc tshark dumpcap || true
 
-   echo ""
-   echo "Starting attack, burst=${burst}, period=${period}"
+    echo ""
+    echo "Starting attack, burst=${burst}, period=${period}"
 
     python dos.py --rto=1000 --period "${period}" --burst "${burst}" \
                   --suffix "${HOSTNAME}-${START_TIME}"

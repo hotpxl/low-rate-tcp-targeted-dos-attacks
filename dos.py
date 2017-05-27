@@ -37,7 +37,10 @@ class Topo(mininet.topo.Topo):
         self.addLink(
             bob, server_switch, bw=100, delay='1ms', max_queue_size=10)
         self.addLink(
-            server_switch, local_switch, bw=1.5, delay='20ms',
+            server_switch,
+            local_switch,
+            bw=1.5,
+            delay='20ms',
             max_queue_size=1000)
 
 
@@ -54,7 +57,7 @@ def set_interface(net, min_rto_ms):
         node.cmd('ethtool -K {}-eth0 tso off gso off gro off'.format(host))
 
 
-def run_flow(net):
+def run_flow(net, cwnd_file=None):
     alice = net.get('alice')
     bob = net.get('bob')
     print('Starting receiver on {}.'.format(bob.IP()))
@@ -63,12 +66,13 @@ def run_flow(net):
     time.sleep(1.0)
     print('Starting sender on {}.'.format(alice.IP()))
     start = time.time()
-    c = alice.popen('./run_sender.sh {}'.format(bob.IP()), shell=True)
+    sender_cmd = './run_sender.sh -t {}'.format(bob.IP())
+    if cwnd_file is not None:
+        sender_cmd += ' -p {}'.format(cwnd_file)
+    c = alice.popen(sender_cmd, shell=True)
     print('TCP flow started on Alice and Bob.')
-    r = c.wait()
-    assert r == 0
-    r = s.wait()
-    assert r == 0
+    assert c.wait() == 0
+    assert s.wait() == 0
     return time.time() - start
 
 
@@ -93,8 +97,11 @@ def main():
     parser.add_argument(
         '--cong', help="Congestion control algorithm to use.", default='reno')
     parser.add_argument(
-        '--suffix', '-s', help="Suffix for output directory",
-        type=str, default='')
+        '--suffix',
+        '-s',
+        help="Suffix for output directory",
+        type=str,
+        default='')
     parser.add_argument(
         '--period',
         '-p',
@@ -123,20 +130,21 @@ def main():
     print('Mallory\'s IP is {}.'.format(net.get('mallory').IP()))
     print('')
 
-    attack = start_attack(net, args.period, args.burst)
-
-    t = run_flow(net)
-    print('Sending completed in %.4f seconds.' % t)
-
     output_dir = 'results'
     if args.suffix:
         output_dir += '-' + args.suffix
-
     if not os.path.isdir(output_dir):
         os.mkdir(output_dir)
-    fname = os.path.join(output_dir,
-                         't-{}-{}.txt'.format(args.period, args.burst))
-    with open(fname, 'w') as f:
+    time_file = os.path.join(output_dir, 't-{}-{}.txt'.format(
+        args.period, args.burst))
+    cwnd_file = os.path.join(output_dir, 'cwnd-{}-{}.txt'.format(
+        args.period, args.burst))
+
+    attack = start_attack(net, args.period, args.burst)
+
+    t = run_flow(net, cwnd_file=cwnd_file)
+    print('Sending completed in %.4f seconds.' % t)
+    with open(time_file, 'w') as f:
         f.write(str(t) + '\n')
 
     attack.terminate()
