@@ -11,13 +11,15 @@ import matplotlib.pyplot as plt
 import numpy as np
 import sys
 
-TRANSFER_MB = 2        # Data transfered in megabytes
+TRANSFER_MB = 2  # Data transfered in megabytes
 BOTTLENECK_LINK = 1.5  # Mbps
 
 
 def main():
-    dir_names = [f for f in os.listdir('.')
-                 if f.startswith('results-') and os.path.isdir(f)]
+    dir_names = [
+        f for f in os.listdir('.')
+        if f.startswith('results-') and os.path.isdir(f)
+    ]
     for dir_name in dir_names:
         files = [i for i in os.listdir(dir_name) if i.startswith('t-')]
 
@@ -33,8 +35,8 @@ def main():
                 normalized_rate = tx_rate / BOTTLENECK_LINK
                 bursts[burst].append((period, normalized_rate))
         for burst in bursts:
-            plt.plot(*zip(*sorted(bursts[burst])),
-                     label='burst: {}'.format(burst))
+            plt.plot(
+                *zip(*sorted(bursts[burst])), label='burst: {}'.format(burst))
         plt.xlabel('Period (s)')
         plt.ylabel('Normalized throughput')
         plt.legend(loc='best')

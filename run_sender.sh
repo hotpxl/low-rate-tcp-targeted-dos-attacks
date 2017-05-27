@@ -33,7 +33,7 @@ fi
 
 if [[ ! -z "${PROBE_OUTPUT}" ]]; then
   rmmod tcp_probe 2>/dev/null || true
-  modprobe tcp_probe full=1
+  modprobe tcp_probe port=12345
   dd if=/proc/1/net/tcpprobe of="${PROBE_OUTPUT}" ibs=128 obs=128 status=none &
   PROBE_PID="$!"
   defer() {

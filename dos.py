@@ -101,7 +101,7 @@ def main():
         '-s',
         help="Suffix for output directory",
         type=str,
-        default='')
+        default='default')
     parser.add_argument(
         '--period',
         '-p',
@@ -130,9 +130,7 @@ def main():
     print('Mallory\'s IP is {}.'.format(net.get('mallory').IP()))
     print('')
 
-    output_dir = 'results'
-    if args.suffix:
-        output_dir += '-' + args.suffix
+    output_dir = 'results-{}'.format(args.suffix)
     if not os.path.isdir(output_dir):
         os.mkdir(output_dir)
     time_file = os.path.join(output_dir, 't-{}-{}.txt'.format(
