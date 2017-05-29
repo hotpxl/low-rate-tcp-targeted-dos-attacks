@@ -24,6 +24,8 @@ def main():
         for fname in files:
             full_path = os.path.join(dir_name, fname)
             period, burst = tuple(map(float, fname[5:-4].split('-')))
+            if period > 1.0 or int(period*100) % 10 != 0:
+                continue
             bursts.setdefault(burst, [])
             with open(full_path) as f:
                 tss = []

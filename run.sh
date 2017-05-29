@@ -22,9 +22,11 @@ if [ "$full" = true ]; then
   max_period=2.0
 fi
 
+EXTERNAL_IP=`curl -H "Metadata-Flavor: Google" http://169.254.169.254/computeMetadata/v1/instance/network-interfaces/0/access-configs/0/external-ip`
+
 START_TIME=`date +%Y%m%d-%H%M%S`
 HOSTNAME=`hostname`
-echo "Run $START_TIME on $HOSTNAME started."
+echo "Run $START_TIME on $HOSTNAME ($EXTERNAL_IP) started."
 
 for burst in $(seq 0.15 0.05 ${max_burst}); do
   for period in $(seq 0.5 0.05 ${max_period}); do
@@ -46,3 +48,7 @@ for burst in $(seq 0.15 0.05 ${max_burst}); do
 done
 
 su $SUDO_USER -c ./plot_bw.py
+su $SUDO_USER -c ./plot_cwnd.py
+
+echo "Visit: http://$EXTERNAL_IP:80 to view results."
+./webserver.py
