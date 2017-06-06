@@ -32,7 +32,9 @@ This is a reproduction of [Low-Rate TCP-Targeted Denial of Service Attacks](http
     ```
 
 4.  Now, `cd low-rate-tcp-targeted-dos-attacks` and `sudo ./run.sh` to run the
-    experiment. Please be patient; a run takes between 1 to 2 hours.
+    experiment. Please be patient; a run takes between 1 to 2 hours. If you
+    want to have the full results as in our blog post, run with `sudo ./run.sh
+    -f`.
 
 5.  After the script runs, it will show you a URL where you can view the
     results. There should be two generated `.png` files in the root directory.
